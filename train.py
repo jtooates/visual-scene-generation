@@ -234,12 +234,11 @@ class SceneGenerationTrainer:
                             sos_token_id=self.dataset.vocab['<SOS>'],
                             eos_token_id=self.dataset.vocab['<EOS>']
                         )
-                        # We still need logits for caption loss, so do forward pass with generated tokens
-                        caption_outputs = self.caption_network(
-                            generated_scenes,
-                            generated_tokens[:, :-1],  # Remove last token for alignment
-                            return_embeddings=True
-                        )
+                        # For autoregressive mode, we only care about embedding consistency, not token prediction
+                        # So we pass None for caption_logits and caption_targets
+                        caption_outputs = {'embeddings': caption_embeddings}
+                        caption_logits = None
+                        caption_targets = None
                     else:
                         # Teacher forcing mode (original behavior)
                         caption_outputs = self.caption_network(
@@ -247,14 +246,16 @@ class SceneGenerationTrainer:
                             input_ids,  # Use original as target for teacher forcing
                             return_embeddings=True
                         )
+                        caption_logits = caption_outputs['logits']
+                        caption_targets = labels
 
                     # Compute composite loss
                     losses = self.scene_loss_fn(
                         scene_outputs,
                         text_embeddings,
                         caption_outputs['embeddings'],
-                        caption_logits=caption_outputs['logits'],
-                        caption_targets=labels
+                        caption_logits=caption_logits,
+                        caption_targets=caption_targets
                     )
 
                     # Apply warmup scaling
@@ -284,12 +285,11 @@ class SceneGenerationTrainer:
                         sos_token_id=self.dataset.vocab['<SOS>'],
                         eos_token_id=self.dataset.vocab['<EOS>']
                     )
-                    # We still need logits for caption loss, so do forward pass with generated tokens
-                    caption_outputs = self.caption_network(
-                        generated_scenes,
-                        generated_tokens[:, :-1],  # Remove last token for alignment
-                        return_embeddings=True
-                    )
+                    # For autoregressive mode, we only care about embedding consistency, not token prediction
+                    # So we pass None for caption_logits and caption_targets
+                    caption_outputs = {'embeddings': caption_embeddings}
+                    caption_logits = None
+                    caption_targets = None
                 else:
                     # Teacher forcing mode (original behavior)
                     caption_outputs = self.caption_network(
@@ -297,14 +297,16 @@ class SceneGenerationTrainer:
                         input_ids,
                         return_embeddings=True
                     )
+                    caption_logits = caption_outputs['logits']
+                    caption_targets = labels
 
                 # Compute composite loss
                 losses = self.scene_loss_fn(
                     scene_outputs,
                     text_embeddings,
                     caption_outputs['embeddings'],
-                    caption_logits=caption_outputs['logits'],
-                    caption_targets=labels
+                    caption_logits=caption_logits,
+                    caption_targets=caption_targets
                 )
 
                 # Apply warmup scaling to prevent early instability
