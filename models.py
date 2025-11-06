@@ -533,17 +533,27 @@ class CaptionNetwork(nn.Module):
         # Initialize with SOS token
         generated = torch.full((batch_size, 1), sos_token_id, dtype=torch.long, device=device)
 
-        # Initialize LSTM hidden state with visual embedding
-        h = visual_embedding.unsqueeze(0).repeat(self.lstm.num_layers, 1, 1)
+        # Initialize LSTM hidden state (need to project visual embedding to hidden_dim)
+        # Visual embedding is embedding_dim, but LSTM expects hidden_dim
+        h = torch.zeros((self.lstm.num_layers, batch_size, self.hidden_dim), device=device)
         c = torch.zeros_like(h)
 
+        # Use visual embedding as initial input context
+        visual_context = visual_embedding.unsqueeze(1)  # [batch, 1, embedding_dim]
+
         with torch.no_grad():
-            for _ in range(max_length - 1):
-                # Embed last token
-                token_emb = self.token_embedding(generated[:, -1:])
+            for i in range(max_length - 1):
+                # Use visual context for first step, then token embeddings
+                if i == 0:
+                    # First step: use visual embedding as input
+                    lstm_input = visual_context
+                else:
+                    # Subsequent steps: use previous token embedding
+                    token_emb = self.token_embedding(generated[:, -1:])
+                    lstm_input = token_emb
 
                 # LSTM step
-                lstm_out, (h, c) = self.lstm(token_emb, (h, c))
+                lstm_out, (h, c) = self.lstm(lstm_input, (h, c))
 
                 # Generate next token
                 logits = self.output_projection(lstm_out[:, -1, :]) / temperature
