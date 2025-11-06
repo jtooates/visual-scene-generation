@@ -34,16 +34,32 @@ The system consists of three main components:
 
 ## Installation
 
+### Local Installation
 ```bash
 pip install torch torchvision matplotlib numpy scikit-learn pillow tqdm
 ```
+
+### Google Colab
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jtooates/visual-scene-generation/blob/main/colab_setup.ipynb)
+
+1. Open the `colab_setup.ipynb` notebook in Colab
+2. Enable GPU: Runtime → Change runtime type → GPU
+3. Run all cells to train the model
 
 ## Quick Start
 
 ### Basic Training
 
+#### Local
 ```bash
 python train.py --epochs 50 --batch_size 32 --use_vae
+```
+
+#### Google Colab
+```python
+# In Colab, after cloning the repo:
+!python colab_train.py quick  # Quick 10-epoch test
+!python colab_train.py full   # Full 50-epoch training
 ```
 
 ### Advanced Training with Custom Parameters

@@ -18,7 +18,7 @@ logs/
 
 # Jupyter Notebooks
 .ipynb_checkpoints
-*.ipynb
+# *.ipynb  # Commented out to allow colab_setup.ipynb
 
 # IDE
 .vscode/
