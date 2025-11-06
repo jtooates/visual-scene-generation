@@ -33,8 +33,14 @@ class SceneGenerationTrainer:
         self.config = config
         self.device = device
 
+        # Ensure checkpoint and log directories exist
+        os.makedirs(config.checkpoint_dir, exist_ok=True)
+        os.makedirs(config.log_dir, exist_ok=True)
+        print(f"Checkpoint directory: {os.path.abspath(config.checkpoint_dir)}")
+        print(f"Log directory: {os.path.abspath(config.log_dir)}")
+
         # Create data loaders
-        print("Creating dataset...")
+        print("\nCreating dataset...")
         self.train_loader, self.val_loader, self.dataset = create_data_loaders(
             batch_size=config.batch_size,
             num_samples=config.num_samples,
