@@ -130,6 +130,7 @@ class SceneGenerationTrainer:
         self.epoch = 0
         self.global_step = 0
         self.best_val_loss = float('inf')
+        self.warmup_steps = 100  # Gradual warmup for stability
 
     def train_epoch(self) -> float:
         """Train for one epoch"""
@@ -163,6 +164,8 @@ class SceneGenerationTrainer:
                     )
 
                 self.scaler.scale(ar_loss).backward()
+                self.scaler.unscale_(self.ar_optimizer)
+                torch.nn.utils.clip_grad_norm_(self.ar_model.parameters(), max_norm=1.0)
                 self.scaler.step(self.ar_optimizer)
                 self.scaler.update()
             else:
@@ -177,11 +180,22 @@ class SceneGenerationTrainer:
                     ignore_index=-100
                 )
                 ar_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.ar_model.parameters(), max_norm=1.0)
                 self.ar_optimizer.step()
+
+            # Check for NaN in AR loss
+            if torch.isnan(ar_loss) or torch.isinf(ar_loss):
+                print(f"Warning: NaN/Inf in AR loss at step {self.global_step}, skipping batch")
+                continue
 
             # Stage 2: Generate scenes from embeddings
             with torch.no_grad():
                 text_embeddings = ar_outputs['embeddings'].detach()
+
+                # Check embeddings for NaN
+                if torch.isnan(text_embeddings).any() or torch.isinf(text_embeddings).any():
+                    print(f"Warning: NaN/Inf in embeddings at step {self.global_step}, skipping batch")
+                    continue
 
             self.decoder_optimizer.zero_grad()
             self.caption_optimizer.zero_grad()
@@ -208,7 +222,9 @@ class SceneGenerationTrainer:
                         caption_targets=labels
                     )
 
-                    total_batch_loss = losses['total']
+                    # Apply warmup scaling
+                    warmup_scale = min(1.0, self.global_step / self.warmup_steps)
+                    total_batch_loss = losses['total'] * warmup_scale
 
                 self.scaler.scale(total_batch_loss).backward()
                 # Gradient clipping to prevent NaN
@@ -240,7 +256,9 @@ class SceneGenerationTrainer:
                     caption_targets=labels
                 )
 
-                total_batch_loss = losses['total']
+                # Apply warmup scaling to prevent early instability
+                warmup_scale = min(1.0, self.global_step / self.warmup_steps)
+                total_batch_loss = losses['total'] * warmup_scale
                 total_batch_loss.backward()
 
                 # Gradient clipping to prevent NaN
@@ -461,13 +479,13 @@ def main():
     # Training parameters
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.00005, help='Learning rate')
     parser.add_argument('--train_split', type=float, default=0.8, help='Train/val split ratio')
     parser.add_argument('--use_amp', action='store_true', help='Use mixed precision training')
 
     # Loss weights
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0)
-    parser.add_argument('--lambda_kl', type=float, default=0.001)
+    parser.add_argument('--lambda_kl', type=float, default=0.00001)
     parser.add_argument('--lambda_spatial', type=float, default=0.1)
     parser.add_argument('--lambda_diversity', type=float, default=0.01)
     parser.add_argument('--lambda_perceptual', type=float, default=0.1)
