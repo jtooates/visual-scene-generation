@@ -342,12 +342,33 @@ class SceneGenerationTrainer:
 
                 total_loss += losses['total'].item()
 
-                # Collect samples for visualization
+                # Collect samples for visualization and diagnostics
                 if batch_idx == 0:
                     all_scenes = generated_scenes[:8]
                     all_texts = texts[:8]
 
+                    # Generate captions for round-trip diagnostics
+                    all_reconstructed = []
+                    for i in range(min(4, len(all_scenes))):  # Show 4 examples
+                        scene = all_scenes[i:i+1]
+                        generated_caption, _ = self.caption_network.generate_caption(scene)
+                        reconstructed_text = self.dataset.decode_tokens(generated_caption[0])
+                        all_reconstructed.append(reconstructed_text)
+
         avg_loss = total_loss / len(self.val_loader)
+
+        # Print round-trip diagnostics
+        if len(all_scenes) > 0 and len(all_reconstructed) > 0:
+            print("\n" + "="*70)
+            print("ROUND-TRIP EXAMPLES (Text → Scene → Text)")
+            print("="*70)
+            for i in range(len(all_reconstructed)):
+                print(f"\n{i+1}. Original:      {all_texts[i]}")
+                print(f"   Reconstructed: {all_reconstructed[i]}")
+            print("="*70 + "\n")
+
+            # Save to file
+            self.monitor.log_roundtrip(all_texts[:len(all_reconstructed)], all_reconstructed, self.epoch)
 
         # Visualize some results
         if len(all_scenes) > 0:

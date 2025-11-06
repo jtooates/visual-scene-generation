@@ -380,6 +380,16 @@ class TrainingMonitor:
         save_path = os.path.join(self.log_dir, f'scenes_epoch_{epoch}.png')
         visualize_scenes(scenes, texts, save_path)
 
+    def log_roundtrip(self, original_texts: List[str], reconstructed_texts: List[str], epoch: int):
+        """Log round-trip examples to file"""
+        save_path = os.path.join(self.log_dir, f'roundtrip_epoch_{epoch}.txt')
+        with open(save_path, 'w') as f:
+            f.write(f"Round-Trip Examples (Epoch {epoch})\n")
+            f.write("="*70 + "\n\n")
+            for i, (orig, recon) in enumerate(zip(original_texts, reconstructed_texts)):
+                f.write(f"{i+1}. Original:      {orig}\n")
+                f.write(f"   Reconstructed: {recon}\n\n")
+
     def save_summary(self):
         """Save training summary"""
         summary_path = os.path.join(self.log_dir, 'training_summary.txt')
