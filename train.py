@@ -227,16 +227,22 @@ class SceneGenerationTrainer:
 
                     # Generate captions from scenes - use scheduled sampling
                     if use_autoregressive:
-                        # Autoregressive generation mode
-                        generated_tokens, caption_embeddings = self.caption_network.generate_caption(
+                        # Autoregressive generation mode - detach to avoid backprop through generation
+                        with torch.no_grad():
+                            generated_tokens, _ = self.caption_network.generate_caption(
+                                generated_scenes.detach(),  # Detach scene to avoid backprop issues
+                                max_length=input_ids.shape[1],
+                                sos_token_id=self.dataset.vocab['<SOS>'],
+                                eos_token_id=self.dataset.vocab['<EOS>']
+                            )
+
+                        # Now get embeddings in training mode for gradient flow
+                        caption_outputs = self.caption_network(
                             generated_scenes,
-                            max_length=input_ids.shape[1],
-                            sos_token_id=self.dataset.vocab['<SOS>'],
-                            eos_token_id=self.dataset.vocab['<EOS>']
+                            generated_tokens,
+                            return_embeddings=True
                         )
-                        # For autoregressive mode, we only care about embedding consistency, not token prediction
-                        # So we pass None for caption_logits and caption_targets
-                        caption_outputs = {'embeddings': caption_embeddings}
+                        # For autoregressive mode, we only care about embedding consistency
                         caption_logits = None
                         caption_targets = None
                     else:
@@ -278,16 +284,22 @@ class SceneGenerationTrainer:
 
                 # Generate captions from scenes - use scheduled sampling
                 if use_autoregressive:
-                    # Autoregressive generation mode
-                    generated_tokens, caption_embeddings = self.caption_network.generate_caption(
+                    # Autoregressive generation mode - detach to avoid backprop through generation
+                    with torch.no_grad():
+                        generated_tokens, _ = self.caption_network.generate_caption(
+                            generated_scenes.detach(),  # Detach scene to avoid backprop issues
+                            max_length=input_ids.shape[1],
+                            sos_token_id=self.dataset.vocab['<SOS>'],
+                            eos_token_id=self.dataset.vocab['<EOS>']
+                        )
+
+                    # Now get embeddings in training mode for gradient flow
+                    caption_outputs = self.caption_network(
                         generated_scenes,
-                        max_length=input_ids.shape[1],
-                        sos_token_id=self.dataset.vocab['<SOS>'],
-                        eos_token_id=self.dataset.vocab['<EOS>']
+                        generated_tokens,
+                        return_embeddings=True
                     )
-                    # For autoregressive mode, we only care about embedding consistency, not token prediction
-                    # So we pass None for caption_logits and caption_targets
-                    caption_outputs = {'embeddings': caption_embeddings}
+                    # For autoregressive mode, we only care about embedding consistency
                     caption_logits = None
                     caption_targets = None
                 else:
