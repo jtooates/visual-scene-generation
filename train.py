@@ -132,6 +132,10 @@ class SceneGenerationTrainer:
         self.best_val_loss = float('inf')
         self.warmup_steps = 100  # Gradual warmup for stability
 
+        # Scheduled sampling parameters
+        self.scheduled_sampling_start_epoch = 5  # Start after model stabilizes
+        self.scheduled_sampling_end_epoch = 30   # Full autoregressive by epoch 30
+
     def train_epoch(self) -> float:
         """Train for one epoch"""
         self.ar_model.train()
@@ -200,18 +204,49 @@ class SceneGenerationTrainer:
             self.decoder_optimizer.zero_grad()
             self.caption_optimizer.zero_grad()
 
+            # Calculate scheduled sampling probability
+            # Gradually transition from teacher forcing (prob=0) to autoregressive (prob=1)
+            if self.epoch < self.scheduled_sampling_start_epoch:
+                use_autoregressive_prob = 0.0
+            elif self.epoch >= self.scheduled_sampling_end_epoch:
+                use_autoregressive_prob = 1.0
+            else:
+                # Linear ramp from 0 to 1
+                progress = (self.epoch - self.scheduled_sampling_start_epoch) / \
+                          (self.scheduled_sampling_end_epoch - self.scheduled_sampling_start_epoch)
+                use_autoregressive_prob = progress
+
+            # Decide whether to use autoregressive generation or teacher forcing
+            use_autoregressive = (torch.rand(1).item() < use_autoregressive_prob)
+
             if self.config.use_amp and self.scaler is not None:
                 with autocast():
                     # Generate scenes
                     scene_outputs = self.scene_decoder(text_embeddings)
                     generated_scenes = scene_outputs['scene']
 
-                    # Generate captions from scenes
-                    caption_outputs = self.caption_network(
-                        generated_scenes,
-                        input_ids,  # Use original as target for teacher forcing
-                        return_embeddings=True
-                    )
+                    # Generate captions from scenes - use scheduled sampling
+                    if use_autoregressive:
+                        # Autoregressive generation mode
+                        generated_tokens, caption_embeddings = self.caption_network.generate_caption(
+                            generated_scenes,
+                            max_length=input_ids.shape[1],
+                            sos_token_id=self.dataset.vocab['<SOS>'],
+                            eos_token_id=self.dataset.vocab['<EOS>']
+                        )
+                        # We still need logits for caption loss, so do forward pass with generated tokens
+                        caption_outputs = self.caption_network(
+                            generated_scenes,
+                            generated_tokens[:, :-1],  # Remove last token for alignment
+                            return_embeddings=True
+                        )
+                    else:
+                        # Teacher forcing mode (original behavior)
+                        caption_outputs = self.caption_network(
+                            generated_scenes,
+                            input_ids,  # Use original as target for teacher forcing
+                            return_embeddings=True
+                        )
 
                     # Compute composite loss
                     losses = self.scene_loss_fn(
@@ -240,12 +275,28 @@ class SceneGenerationTrainer:
                 scene_outputs = self.scene_decoder(text_embeddings)
                 generated_scenes = scene_outputs['scene']
 
-                # Generate captions from scenes
-                caption_outputs = self.caption_network(
-                    generated_scenes,
-                    input_ids,
-                    return_embeddings=True
-                )
+                # Generate captions from scenes - use scheduled sampling
+                if use_autoregressive:
+                    # Autoregressive generation mode
+                    generated_tokens, caption_embeddings = self.caption_network.generate_caption(
+                        generated_scenes,
+                        max_length=input_ids.shape[1],
+                        sos_token_id=self.dataset.vocab['<SOS>'],
+                        eos_token_id=self.dataset.vocab['<EOS>']
+                    )
+                    # We still need logits for caption loss, so do forward pass with generated tokens
+                    caption_outputs = self.caption_network(
+                        generated_scenes,
+                        generated_tokens[:, :-1],  # Remove last token for alignment
+                        return_embeddings=True
+                    )
+                else:
+                    # Teacher forcing mode (original behavior)
+                    caption_outputs = self.caption_network(
+                        generated_scenes,
+                        input_ids,
+                        return_embeddings=True
+                    )
 
                 # Compute composite loss
                 losses = self.scene_loss_fn(
@@ -280,7 +331,9 @@ class SceneGenerationTrainer:
             progress_bar.set_postfix({
                 'ar_loss': ar_loss.item(),
                 'consistency': losses['consistency'].item(),
-                'total': total_batch_loss.item()
+                'kl_loss': losses.get('kl', torch.tensor(0)).item(),
+                'total': total_batch_loss.item(),
+                'autoreg_prob': f'{use_autoregressive_prob:.2f}'
             })
 
             # Log intermediate results
@@ -388,7 +441,18 @@ class SceneGenerationTrainer:
 
             # Training
             train_loss = self.train_epoch()
-            print(f"\nEpoch {epoch + 1}/{self.config.epochs} - Train Loss: {train_loss:.4f}")
+
+            # Calculate current scheduled sampling probability for logging
+            if self.epoch < self.scheduled_sampling_start_epoch:
+                ss_prob = 0.0
+            elif self.epoch >= self.scheduled_sampling_end_epoch:
+                ss_prob = 1.0
+            else:
+                progress = (self.epoch - self.scheduled_sampling_start_epoch) / \
+                          (self.scheduled_sampling_end_epoch - self.scheduled_sampling_start_epoch)
+                ss_prob = progress
+
+            print(f"\nEpoch {epoch + 1}/{self.config.epochs} - Train Loss: {train_loss:.4f} - Autoregressive prob: {ss_prob:.2f}")
 
             # Validation
             val_loss = self.validate()
@@ -506,7 +570,7 @@ def main():
 
     # Loss weights
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0)
-    parser.add_argument('--lambda_kl', type=float, default=0.00001)
+    parser.add_argument('--lambda_kl', type=float, default=0.001, help='KL divergence weight (increased from 0.00001 to enforce compression)')
     parser.add_argument('--lambda_spatial', type=float, default=0.1)
     parser.add_argument('--lambda_diversity', type=float, default=0.01)
     parser.add_argument('--lambda_perceptual', type=float, default=0.1)

@@ -533,41 +533,36 @@ class CaptionNetwork(nn.Module):
         # Initialize with SOS token
         generated = torch.full((batch_size, 1), sos_token_id, dtype=torch.long, device=device)
 
-        # Initialize LSTM hidden state (need to project visual embedding to hidden_dim)
-        # Visual embedding is embedding_dim, but LSTM expects hidden_dim
+        # Initialize LSTM hidden state
         h = torch.zeros((self.lstm.num_layers, batch_size, self.hidden_dim), device=device)
         c = torch.zeros_like(h)
 
-        # Use visual embedding as initial input context
-        visual_context = visual_embedding.unsqueeze(1)  # [batch, 1, embedding_dim]
-
         with torch.no_grad():
             for i in range(max_length - 1):
-                # Use visual context for first step, then token embeddings
                 if i == 0:
                     # First step: use visual embedding as input
-                    lstm_input = visual_context
+                    lstm_input = visual_embedding.unsqueeze(1)  # [batch, 1, embedding_dim]
                 else:
-                    # Subsequent steps: use previous token embedding
-                    token_emb = self.token_embedding(generated[:, -1:])
-                    lstm_input = token_emb
+                    # Subsequent steps: embed the LAST GENERATED token
+                    last_token = generated[:, -1:]  # Get the most recent token
+                    lstm_input = self.token_embedding(last_token)  # [batch, 1, embedding_dim]
 
-                # LSTM step
+                # LSTM step - process one token at a time
                 lstm_out, (h, c) = self.lstm(lstm_input, (h, c))
 
-                # Generate next token
-                logits = self.output_projection(lstm_out[:, -1, :]) / temperature
+                # Generate next token from the LSTM output
+                logits = self.output_projection(lstm_out.squeeze(1)) / temperature  # [batch, vocab_size]
                 probs = F.softmax(logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
+                next_token = torch.multinomial(probs, num_samples=1)  # [batch, 1]
 
                 # Append to sequence
                 generated = torch.cat([generated, next_token], dim=-1)
 
-                # Check for EOS
+                # Check for EOS (only break if ALL sequences in batch hit EOS)
                 if (next_token == eos_token_id).all():
                     break
 
-        # Extract final embedding
+        # Extract final embedding from last hidden state
         caption_embedding = self.embedding_extractor(h[-1])
 
         return generated, caption_embedding
