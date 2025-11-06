@@ -48,11 +48,11 @@ pip install torch torchvision matplotlib numpy scikit-learn pillow tqdm
 
 ## Quick Start
 
-### Basic Training
+### Basic Training (Recommended Stable Settings)
 
 #### Local
 ```bash
-python train.py --epochs 50 --batch_size 32 --use_vae
+python train.py --epochs 50 --batch_size 8 --use_vae
 ```
 
 #### Google Colab
@@ -64,17 +64,18 @@ python train.py --epochs 50 --batch_size 32 --use_vae
 
 ### Advanced Training with Custom Parameters
 
+**Note**: Batch size 8 is recommended for stability. Mixed precision (`--use_amp`) may cause NaN issues.
+
 ```bash
 python train.py \
     --epochs 100 \
-    --batch_size 64 \
-    --lr 0.001 \
+    --batch_size 8 \
+    --lr 0.00005 \
     --d_model 512 \
     --hidden_dim 256 \
     --use_vae \
-    --use_amp \
-    --lambda_consistency 2.0 \
-    --lambda_spatial 0.2 \
+    --lambda_consistency 1.0 \
+    --lambda_spatial 0.1 \
     --num_samples 20000
 ```
 
@@ -137,10 +138,12 @@ After training, the script automatically generates sample scenes for visualizati
 ## Tips for Success
 
 1. **Start small**: Begin with 10K samples and 50 epochs to verify the approach
-2. **Monitor consistency loss**: This is the key metric for semantic preservation
-3. **Tune bottleneck size**: Smaller z_dim (64-128) prevents trivial solutions
-4. **Balance loss weights**: Adjust lambdas if one loss dominates
-5. **Use VAE mode**: The VAE bottleneck helps prevent information passthrough
+2. **Use batch size 8**: Larger batches (16, 32) can cause training instability
+3. **Avoid mixed precision**: `--use_amp` can lead to NaN issues
+4. **Monitor consistency loss**: This is the key metric for semantic preservation
+5. **Tune bottleneck size**: Smaller z_dim (64-128) prevents trivial solutions
+6. **Balance loss weights**: Adjust lambdas if one loss dominates
+7. **Use VAE mode**: The VAE bottleneck helps prevent information passthrough
 
 ## Extending the System
 
@@ -153,10 +156,12 @@ Ideas for enhancement:
 
 ## Troubleshooting
 
+- **NaN losses**: Use batch size 8, remove `--use_amp`, lower learning rate to 0.00001
 - **Mode collapse**: Increase diversity loss weight
 - **Noisy scenes**: Increase spatial coherence weight
 - **Poor reconstruction**: Increase consistency loss weight
 - **Trivial solution**: Decrease z_dim or increase KL weight
+- **Training instability**: Reduce batch size to 8 or 4, ensure `--use_vae` is enabled
 
 ## Citation
 

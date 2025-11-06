@@ -478,10 +478,10 @@ def main():
 
     # Training parameters
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=8, help='Batch size (8 recommended for stability)')
     parser.add_argument('--lr', type=float, default=0.00005, help='Learning rate')
     parser.add_argument('--train_split', type=float, default=0.8, help='Train/val split ratio')
-    parser.add_argument('--use_amp', action='store_true', help='Use mixed precision training')
+    parser.add_argument('--use_amp', action='store_true', help='Use mixed precision training (may cause instability)')
 
     # Loss weights
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0)

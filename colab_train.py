@@ -35,16 +35,13 @@ def quick_train():
     """Quick training configuration for testing"""
     cmd = """python train.py \
         --epochs 10 \
-        --batch_size 16 \
+        --batch_size 8 \
         --num_samples 2000 \
         --use_vae \
-        --use_amp \
         --log_interval 5 \
-        --lr 0.0001 \
         --d_model 256 \
         --hidden_dim 128 \
-        --z_dim 64 \
-        --lambda_kl 0.0001"""
+        --z_dim 64"""
 
     print("Starting quick training run...")
     print("This should take ~5-10 minutes on Colab GPU")
@@ -54,17 +51,14 @@ def full_train():
     """Full training configuration"""
     cmd = """python train.py \
         --epochs 50 \
-        --batch_size 32 \
+        --batch_size 8 \
         --num_samples 10000 \
         --use_vae \
-        --use_amp \
-        --lr 0.0001 \
         --d_model 512 \
         --hidden_dim 256 \
         --z_dim 128 \
         --lambda_consistency 1.0 \
-        --lambda_spatial 0.1 \
-        --lambda_kl 0.0001"""
+        --lambda_spatial 0.1"""
 
     print("Starting full training run...")
     print("This should take ~30-60 minutes on Colab GPU")
