@@ -37,8 +37,11 @@ class SceneGenerationLoss(nn.Module):
         KL divergence loss for VAE regularization.
         Prevents the decoder from encoding information trivially.
         """
+        # Clamp logvar to prevent numerical instability
+        logvar = torch.clamp(logvar, min=-10, max=10)
         kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
-        return kl.mean()
+        kl = torch.clamp(kl.mean(), min=0, max=100)  # Prevent exploding KL
+        return kl
 
     def total_variation_loss(self, images: torch.Tensor) -> torch.Tensor:
         """

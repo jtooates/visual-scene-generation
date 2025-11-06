@@ -205,6 +205,11 @@ class SceneGenerationTrainer:
                     total_batch_loss = losses['total']
 
                 self.scaler.scale(total_batch_loss).backward()
+                # Gradient clipping to prevent NaN
+                self.scaler.unscale_(self.decoder_optimizer)
+                self.scaler.unscale_(self.caption_optimizer)
+                torch.nn.utils.clip_grad_norm_(self.scene_decoder.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.caption_network.parameters(), max_norm=1.0)
                 self.scaler.step(self.decoder_optimizer)
                 self.scaler.step(self.caption_optimizer)
                 self.scaler.update()
@@ -232,8 +237,19 @@ class SceneGenerationTrainer:
                 total_batch_loss = losses['total']
                 total_batch_loss.backward()
 
+                # Gradient clipping to prevent NaN
+                torch.nn.utils.clip_grad_norm_(self.scene_decoder.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.caption_network.parameters(), max_norm=1.0)
+
                 self.decoder_optimizer.step()
                 self.caption_optimizer.step()
+
+            # Check for NaN and skip update if found
+            if torch.isnan(total_batch_loss) or torch.isinf(total_batch_loss):
+                print(f"Warning: NaN/Inf detected at step {self.global_step}, skipping batch")
+                self.decoder_optimizer.zero_grad()
+                self.caption_optimizer.zero_grad()
+                continue
 
             # Update metrics
             total_loss += total_batch_loss.item()
@@ -439,7 +455,7 @@ def main():
     # Training parameters
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--train_split', type=float, default=0.8, help='Train/val split ratio')
     parser.add_argument('--use_amp', action='store_true', help='Use mixed precision training')
 
