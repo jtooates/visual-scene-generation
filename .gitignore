@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# PyTorch
+*.pt
+*.pth
+checkpoints/
+logs/
+*.ckpt
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+sample_generations.png
+training_curves.png
+scenes_epoch_*.png
+
+# Data
+data/
+datasets/
+*.csv
+*.json
+
+# Outputs
+outputs/
+results/
+experiments/
