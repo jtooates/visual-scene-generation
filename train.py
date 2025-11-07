@@ -237,9 +237,10 @@ class SceneGenerationTrainer:
                             )
 
                         # Now get embeddings for gradient flow
+                        # Detach tokens to ensure LSTM creates fresh hidden states in gradient context
                         caption_outputs = self.caption_network(
                             generated_scenes,
-                            generated_tokens,
+                            generated_tokens.detach(),  # Detach to prevent contaminated hidden states
                             return_embeddings=True
                         )
                         # For autoregressive mode, we only care about embedding consistency
@@ -294,9 +295,10 @@ class SceneGenerationTrainer:
                         )
 
                     # Now get embeddings for gradient flow
+                    # Detach tokens to ensure LSTM creates fresh hidden states in gradient context
                     caption_outputs = self.caption_network(
                         generated_scenes,
-                        generated_tokens,
+                        generated_tokens.detach(),  # Detach to prevent contaminated hidden states
                         return_embeddings=True
                     )
                     # For autoregressive mode, we only care about embedding consistency
