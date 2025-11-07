@@ -21,11 +21,12 @@ class SceneDescriptionDataset(Dataset):
         self,
         num_samples: int = 10000,
         max_length: int = 50,
-        seed: int = 42
+        seed: Optional[int] = None
     ):
         self.num_samples = num_samples
         self.max_length = max_length
-        random.seed(seed)
+        if seed is not None:
+            random.seed(seed)
 
         # Scene components
         self.colors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 'black', 'white', 'gray']
@@ -200,7 +201,7 @@ def create_data_loaders(
     num_samples: int = 10000,
     train_split: float = 0.8,
     num_workers: int = 2,
-    seed: int = 42
+    seed: Optional[int] = None
 ) -> Tuple[DataLoader, DataLoader, SceneDescriptionDataset]:
     """
     Create train and validation data loaders.
@@ -210,7 +211,7 @@ def create_data_loaders(
         num_samples: Total number of samples to generate
         train_split: Fraction of data for training
         num_workers: Number of data loading workers
-        seed: Random seed
+        seed: Random seed (None for non-deterministic)
 
     Returns:
         Tuple of (train_loader, val_loader, dataset)
@@ -222,10 +223,15 @@ def create_data_loaders(
     train_size = int(train_split * len(dataset))
     val_size = len(dataset) - train_size
 
+    # Create generator for split - only set seed if provided
+    generator = torch.Generator()
+    if seed is not None:
+        generator.manual_seed(seed)
+
     train_dataset, val_dataset = torch.utils.data.random_split(
         dataset,
         [train_size, val_size],
-        generator=torch.Generator().manual_seed(seed)
+        generator=generator
     )
 
     # Create collator

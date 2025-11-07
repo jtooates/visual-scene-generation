@@ -96,7 +96,8 @@ def visualize_embedding_space(
     embeddings: torch.Tensor,
     labels: Optional[List[str]] = None,
     method: str = 'tsne',
-    save_path: Optional[str] = None
+    save_path: Optional[str] = None,
+    random_state: Optional[int] = None
 ) -> None:
     """
     Visualize high-dimensional embeddings in 2D.
@@ -106,6 +107,7 @@ def visualize_embedding_space(
         labels: Optional labels for coloring
         method: Dimensionality reduction method ('tsne' or 'pca')
         save_path: Optional path to save the figure
+        random_state: Random seed for reproducibility (None for non-deterministic)
     """
     from sklearn.manifold import TSNE
     from sklearn.decomposition import PCA
@@ -114,7 +116,7 @@ def visualize_embedding_space(
 
     # Dimensionality reduction
     if method == 'tsne':
-        reducer = TSNE(n_components=2, random_state=42)
+        reducer = TSNE(n_components=2, random_state=random_state)
     else:
         reducer = PCA(n_components=2)
 

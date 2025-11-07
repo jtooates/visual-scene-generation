@@ -594,7 +594,7 @@ def main():
 
     # Data parameters
     parser.add_argument('--num_samples', type=int, default=10000, help='Number of training samples')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None for non-deterministic)')
 
     # Logging
     parser.add_argument('--log_dir', type=str, default='logs', help='Logging directory')
@@ -606,10 +606,14 @@ def main():
 
     args = parser.parse_args()
 
-    # Set random seeds
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    # Set random seeds only if provided
+    if args.seed is not None:
+        print(f"Setting random seed: {args.seed}")
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed)
+        random.seed(args.seed)
+    else:
+        print("Running with non-deterministic random behavior (no seed set)")
 
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
