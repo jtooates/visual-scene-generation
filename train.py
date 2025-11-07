@@ -236,6 +236,9 @@ class SceneGenerationTrainer:
                                 eos_token_id=self.dataset.vocab['<EOS>']
                             )
 
+                        # Restore training mode after generate_caption (which sets eval mode)
+                        self.caption_network.train()
+
                         # Now get embeddings in training mode for gradient flow
                         caption_outputs = self.caption_network(
                             generated_scenes,
@@ -292,6 +295,9 @@ class SceneGenerationTrainer:
                             sos_token_id=self.dataset.vocab['<SOS>'],
                             eos_token_id=self.dataset.vocab['<EOS>']
                         )
+
+                    # Restore training mode after generate_caption (which sets eval mode)
+                    self.caption_network.train()
 
                     # Now get embeddings in training mode for gradient flow
                     caption_outputs = self.caption_network(
