@@ -342,10 +342,20 @@ class SceneGenerationTrainer:
                 self.caption_optimizer.zero_grad()
                 continue
 
+            # Calculate AR model metrics
+            ar_perplexity = torch.exp(ar_loss).item()
+            with torch.no_grad():
+                ar_predictions = ar_outputs['logits'].argmax(dim=-1)
+                # Only calculate accuracy on non-padding tokens
+                valid_mask = (labels != -100)
+                ar_accuracy = (ar_predictions[valid_mask] == labels[valid_mask]).float().mean().item() * 100
+
             # Update metrics
             total_loss += total_batch_loss.item()
             progress_bar.set_postfix({
                 'ar_loss': ar_loss.item(),
+                'ar_ppl': f'{ar_perplexity:.2f}',
+                'ar_acc': f'{ar_accuracy:.1f}%',
                 'consistency': losses['consistency'].item(),
                 'kl_loss': losses.get('kl', torch.tensor(0)).item(),
                 'total': total_batch_loss.item(),
@@ -356,6 +366,9 @@ class SceneGenerationTrainer:
             if batch_idx % self.config.log_interval == 0:
                 self.monitor.update({
                     'train_loss': total_batch_loss.item(),
+                    'ar_loss': ar_loss.item(),
+                    'ar_perplexity': ar_perplexity,
+                    'ar_accuracy': ar_accuracy,
                     'consistency_loss': losses['consistency'].item(),
                     'spatial_loss': losses.get('spatial', torch.tensor(0)).item(),
                     'diversity_loss': losses.get('diversity', torch.tensor(0)).item(),
@@ -374,6 +387,10 @@ class SceneGenerationTrainer:
         self.caption_network.eval()
 
         total_loss = 0
+        ar_total_loss = 0
+        ar_total_accuracy = 0
+        embedding_norms = []
+        all_embeddings = []
         all_scenes = []
         all_texts = []
 
@@ -392,7 +409,29 @@ class SceneGenerationTrainer:
                     return_embeddings=True
                 )
 
+                # Calculate AR model metrics
+                ar_loss = nn.functional.cross_entropy(
+                    ar_outputs['logits'].reshape(-1, ar_outputs['logits'].size(-1)),
+                    labels.reshape(-1),
+                    ignore_index=-100
+                )
+                ar_total_loss += ar_loss.item()
+
+                # Calculate AR accuracy
+                ar_predictions = ar_outputs['logits'].argmax(dim=-1)
+                valid_mask = (labels != -100)
+                ar_accuracy = (ar_predictions[valid_mask] == labels[valid_mask]).float().mean().item() * 100
+                ar_total_accuracy += ar_accuracy
+
                 text_embeddings = ar_outputs['embeddings']
+
+                # Track embedding norms for quality metrics
+                embedding_norms.append(text_embeddings.norm(dim=-1).mean().item())
+
+                # Collect embeddings for diversity calculation (first batch only to save memory)
+                if batch_idx == 0:
+                    all_embeddings.append(text_embeddings)
+
                 scene_outputs = self.scene_decoder(text_embeddings)
                 generated_scenes = scene_outputs['scene']
 
@@ -426,9 +465,39 @@ class SceneGenerationTrainer:
 
         avg_loss = total_loss / len(self.val_loader)
 
+        # Calculate AR model validation metrics
+        ar_avg_loss = ar_total_loss / len(self.val_loader)
+        ar_avg_accuracy = ar_total_accuracy / len(self.val_loader)
+        ar_perplexity = torch.exp(torch.tensor(ar_avg_loss)).item()
+        avg_embedding_norm = sum(embedding_norms) / len(embedding_norms)
+
+        # Calculate embedding diversity (cosine similarity)
+        if len(all_embeddings) > 0:
+            embeddings_batch = torch.cat(all_embeddings, dim=0)
+            # Normalize embeddings
+            embeddings_norm = nn.functional.normalize(embeddings_batch, p=2, dim=1)
+            # Compute pairwise cosine similarities
+            similarity_matrix = torch.mm(embeddings_norm, embeddings_norm.t())
+            # Exclude diagonal (self-similarity)
+            mask = ~torch.eye(similarity_matrix.size(0), dtype=torch.bool, device=similarity_matrix.device)
+            avg_similarity = similarity_matrix[mask].mean().item()
+        else:
+            avg_similarity = 0.0
+
+        # Print AR model metrics
+        print("\n" + "="*70)
+        print("AR MODEL VALIDATION METRICS")
+        print("="*70)
+        print(f"Loss:       {ar_avg_loss:.4f}")
+        print(f"Perplexity: {ar_perplexity:.2f}")
+        print(f"Accuracy:   {ar_avg_accuracy:.2f}%")
+        print(f"Avg Embedding Norm: {avg_embedding_norm:.4f}")
+        print(f"Avg Embedding Similarity: {avg_similarity:.4f} (lower = more diverse)")
+        print("="*70 + "\n")
+
         # Print round-trip diagnostics
         if len(all_scenes) > 0 and len(all_reconstructed) > 0:
-            print("\n" + "="*70)
+            print("="*70)
             print("ROUND-TRIP EXAMPLES (Text → Scene → Text)")
             print("="*70)
             for i in range(len(all_reconstructed)):
