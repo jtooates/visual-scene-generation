@@ -523,7 +523,8 @@ class CaptionNetwork(nn.Module):
         Returns:
             Tuple of (generated_tokens, caption_embedding)
         """
-        self.eval()
+        # Note: Removed self.eval() to avoid switching modes during training
+        # The torch.no_grad() context below handles gradient prevention
         batch_size = scene.shape[0]
         device = scene.device
 
